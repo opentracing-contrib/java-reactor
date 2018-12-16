@@ -1,0 +1,43 @@
+##################################################################################
+# java-reactor Rule Set
+#
+# These rules will intercept calls to the onAssembly method on reactor's
+# implementations of Publisher. onAssembly retrieves configured Hooks for "cross
+# cutting concerns". Here we register TracedSubscriber.asOperator hook and record
+# the activation through the Helper.
+
+HELPER io.opentracing.contrib.agent.OpenTracingHelper
+
+RULE reactor.core.publisher.Flux.onAssembly
+CLASS reactor.core.publisher.Flux
+METHOD onAssembly
+AT ENTRY
+IF getState(reactor.core.publisher.Hooks.class) == 0
+DO
+  reactor.core.publisher.Hooks.onEachOperator(io.opentracing.contrib.reactor.TracedSubscriber.asOperator(getTracer()));
+  reactor.core.publisher.Hooks.onLastOperator(io.opentracing.contrib.reactor.TracedSubscriber.asOperator(getTracer()));
+  setState(reactor.core.publisher.Hooks.class, 1)
+ENDRULE
+
+RULE reactor.core.publisher.Mono.onAssembly
+CLASS reactor.core.publisher.Mono
+METHOD onAssembly
+AT ENTRY
+IF getState(reactor.core.publisher.Hooks.class) == 0
+DO
+  reactor.core.publisher.Hooks.onEachOperator(io.opentracing.contrib.reactor.TracedSubscriber.asOperator(getTracer()));
+  reactor.core.publisher.Hooks.onLastOperator(io.opentracing.contrib.reactor.TracedSubscriber.asOperator(getTracer()));
+  setState(reactor.core.publisher.Hooks.class, 1)
+ENDRULE
+
+RULE reactor.core.publisher.ParallelFlux.onAssembly
+CLASS reactor.core.publisher.ParallelFlux
+METHOD onAssembly
+AT ENTRY
+IF getState(reactor.core.publisher.Hooks.class) == 0
+DO
+  reactor.core.publisher.Hooks.onEachOperator(io.opentracing.contrib.reactor.TracedSubscriber.asOperator(getTracer()));
+  reactor.core.publisher.Hooks.onLastOperator(io.opentracing.contrib.reactor.TracedSubscriber.asOperator(getTracer()));
+  setState(reactor.core.publisher.Hooks.class, 1)
+ENDRULE
+
