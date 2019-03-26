@@ -1,24 +1,25 @@
 package io.opentracing.contrib.reactor;
 
-import io.opentracing.Scope;
-import io.opentracing.mock.MockSpan;
-import io.opentracing.mock.MockTracer;
-import io.opentracing.util.ThreadLocalScopeManager;
+import static org.junit.Assert.*;
+
+import java.util.concurrent.atomic.AtomicReference;
+
 import org.awaitility.Awaitility;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscription;
+
+import io.opentracing.Scope;
+import io.opentracing.mock.MockSpan;
+import io.opentracing.mock.MockTracer;
+import io.opentracing.util.ThreadLocalScopeManager;
 import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Hooks;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
-
-import java.util.concurrent.atomic.AtomicReference;
-
-import static org.junit.Assert.*;
 
 /**
  * Based on Spring Sleuth's Reactor instrumentation

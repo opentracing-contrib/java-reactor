@@ -17,6 +17,7 @@
 package io.opentracing.contrib.reactor;
 
 import org.reactivestreams.Subscription;
+
 import reactor.core.CoreSubscriber;
 import reactor.core.Fuseable;
 
@@ -27,7 +28,7 @@ import reactor.core.Fuseable;
  *
  * @author Marcin Grzejszczak
  */
-public interface SpanSubscription<T> extends Subscription, CoreSubscriber<T>, Fuseable.QueueSubscription<T> {
+public interface SpanSubscription<T> extends CoreSubscriber<T>, Fuseable.QueueSubscription<T> {
 
 	@Override
 	default T poll() {
