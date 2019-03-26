@@ -16,19 +16,20 @@
 
 package io.opentracing.contrib.reactor;
 
-import io.opentracing.Scope;
-import io.opentracing.Span;
-import io.opentracing.Tracer;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
+
+import io.opentracing.Scope;
+import io.opentracing.Span;
+import io.opentracing.Tracer;
 import reactor.core.CoreSubscriber;
 import reactor.core.Fuseable;
 import reactor.core.publisher.Operators;
 import reactor.util.context.Context;
-
-import java.util.function.BiFunction;
-import java.util.function.Function;
 
 /**
  * Based on Spring Sleuth's Reactor instrumentation.
@@ -114,7 +115,6 @@ public class TracedSubscriber<T> implements SpanSubscription<T> {
 	 * @param <T> an arbitrary type that is left unchanged by the span operator
 	 * @return a new span operator pointcut
 	 */
-	@SuppressWarnings("unchecked")
 	public static <T> Function<? super Publisher<T>, ? extends Publisher<T>> asOperator(Tracer tracer) {
 		return Operators.liftPublisher(new BiFunction<Publisher, CoreSubscriber<? super T>, CoreSubscriber<? super T>>() {
 			@Override
@@ -124,7 +124,7 @@ public class TracedSubscriber<T> implements SpanSubscription<T> {
 					return sub;
 				}
 
-				return new TracedSubscriber(sub, sub.currentContext(), tracer);
+				return new TracedSubscriber<>(sub, sub.currentContext(), tracer);
 			}
 		});
 	}

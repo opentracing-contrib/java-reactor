@@ -1,23 +1,23 @@
 package io.opentracing.contrib.reactor;
 
+import static org.junit.Assert.*;
+
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+
 import io.opentracing.Scope;
 import io.opentracing.contrib.specialagent.AgentRunner;
 import io.opentracing.mock.MockSpan;
 import io.opentracing.mock.MockTracer;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 import reactor.core.publisher.Mono;
-
-import java.util.concurrent.atomic.AtomicReference;
-
-import static org.junit.Assert.assertEquals;
 
 /**
  * @author Jose Montoya
  */
 @RunWith(AgentRunner.class)
-@AgentRunner.Config(debug = true, verbose = true)
-public class AgentITest {
+public class AgentTest {
 
 	// #1030
 	@Test

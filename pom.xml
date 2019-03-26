@@ -8,7 +8,7 @@
     <artifactId>opentracing-reactor</artifactId>
     <version>0.0.1-SNAPSHOT</version>
 
-    <name>${project.groupId}:${project.artifactId}</name>
+    <name>SpecialAgent Rule for Reactor</name>
     <description>OpenTracing Instrumentation for Reactor</description>
     <url>https://github.com/opentracing-contrib/java-reactor</url>
     <inceptionYear>2018</inceptionYear>
@@ -36,10 +36,10 @@
 
         <version.reactor-core>3.2.3.RELEASE</version.reactor-core>
         <version.io.opentracing>0.31.0</version.io.opentracing>
-        <version.specialagent-maven-plugin>0.0.1-SNAPSHOT</version.specialagent-maven-plugin>
+        <version.specialagent>1.0.1-SNAPSHOT</version.specialagent>
+        <version.bytebuddy>1.9.10</version.bytebuddy>
         <version.junit>4.12</version.junit>
         <version.maven-surefire-plugin>2.22.1</version.maven-surefire-plugin>
-        <version.maven-failsafe-plugin>2.22.1</version.maven-failsafe-plugin>
         <version.awaitility>3.0.0</version.awaitility>
     </properties>
 
@@ -51,15 +51,37 @@
             <scope>provided</scope>
             <optional>true</optional>
         </dependency>
+
+        <dependency>
+            <groupId>net.bytebuddy</groupId>
+            <artifactId>byte-buddy</artifactId>
+            <version>${version.bytebuddy}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>net.bytebuddy</groupId>
+            <artifactId>byte-buddy-agent</artifactId>
+            <version>${version.bytebuddy}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.opentracing.contrib.specialagent</groupId>
+            <artifactId>opentracing-specialagent-api</artifactId>
+            <version>${version.specialagent}</version>
+            <scope>provided</scope>
+        </dependency>
+
         <dependency>
             <groupId>io.opentracing</groupId>
             <artifactId>opentracing-api</artifactId>
             <version>${version.io.opentracing}</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>io.opentracing</groupId>
             <artifactId>opentracing-util</artifactId>
             <version>${version.io.opentracing}</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>io.opentracing</groupId>
@@ -79,10 +101,11 @@
             <version>${version.awaitility}</version>
             <scope>test</scope>
         </dependency>
+        
         <dependency>
-            <groupId>io.opentracing.contrib</groupId>
+            <groupId>io.opentracing.contrib.specialagent</groupId>
             <artifactId>opentracing-specialagent</artifactId>
-            <version>${version.specialagent-maven-plugin}</version>
+            <version>${version.specialagent}</version>
             <type>test-jar</type>
             <scope>test</scope>
         </dependency>
@@ -110,6 +133,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.1.1</version>
                 <executions>
                     <execution>
                         <goals>
@@ -124,9 +148,9 @@
                 </executions>
             </plugin>
             <plugin>
-                <groupId>io.opentracing.contrib</groupId>
-                <artifactId>specialagent-maven-plugin</artifactId>
-                <version>${version.specialagent-maven-plugin}</version>
+                <groupId>io.opentracing.contrib.specialagent</groupId>
+                <artifactId>agentrule-maven-plugin</artifactId>
+                <version>${version.specialagent}</version>
                 <executions>
                     <execution>
                         <goals>
@@ -145,42 +169,8 @@
                 <version>${version.maven-surefire-plugin}</version>
                 <configuration>
                     <trimStackTrace>false</trimStackTrace>
-                    <includes>
-                        <include>**/*Test</include>
-                        <include>**/*TestCase</include>
-                    </includes>
-                    <excludes>
-                        <exclude>**/*ITest</exclude>
-                        <exclude>**/*IntegrationTest</exclude>
-                        <exclude>**/*IntegrationTestCase</exclude>
-                    </excludes>
+                    <reuseForks>false</reuseForks>
                 </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-failsafe-plugin</artifactId>
-                <version>${version.maven-failsafe-plugin}</version>
-                <executions>
-                    <execution>
-                        <id>integration-test</id>
-                        <goals>
-                            <goal>integration-test</goal>
-                            <goal>verify</goal>
-                        </goals>
-                        <phase>integration-test</phase>
-                        <configuration>
-                            <trimStackTrace>false</trimStackTrace>
-                            <includes>
-                                <include>**/*ITest</include>
-                                <include>**/*IntegrationTest</include>
-                                <include>**/*IntegrationTestCase</include>
-                            </includes>
-                            <excludes>
-                                <exclude></exclude> <!-- This is necessary for inner classes to be run -->
-                            </excludes>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>
