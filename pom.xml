@@ -17,9 +17,9 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
-    <groupId>io.opentracing.contrib</groupId>
-    <artifactId>opentracing-reactor</artifactId>
-    <version>0.0.2-SNAPSHOT</version>
+	<groupId>io.opentracing.contrib</groupId>
+	<artifactId>opentracing-reactor</artifactId>
+	<version>0.0.2-SNAPSHOT</version>
 
 	<name>${project.groupId}:${project.artifactId}</name>
 	<description>OpenTracing Instrumentation for Reactor</description>
@@ -207,7 +207,7 @@
 						<exclude>LICENSE</exclude>
 						<exclude>mvnw</exclude>
 						<exclude>mvnw.cmd</exclude>
-						<exclude>.mvn/wrapper/maven-wrapper.properties</exclude>
+						<exclude>.mvn/**</exclude>
 						<exclude>.coveralls.yml</exclude>
 						<exclude>.gitattributes</exclude>
 						<exclude>**/target/**</exclude>
