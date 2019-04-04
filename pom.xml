@@ -42,6 +42,13 @@
 		</developer>
 	</developers>
 
+	<scm>
+		<connection>scm:git:https://github.com/opentracing-contrib/java-reactor.git</connection>
+		<developerConnection>scm:git:https://github.com/opentracing-contrib/java-reactor.git</developerConnection>
+		<tag>HEAD</tag>
+		<url>https://github.com/opentracing-contrib/java-reactor</url>
+	</scm>
+
 	<issueManagement>
 		<system>GitHub</system>
 		<url>https://github.com/opentracing-contrib/java-reactor/issues</url>
