@@ -78,7 +78,7 @@
 		<version.junit>4.12</version.junit>
 		<version.maven-surefire-plugin>2.22.1</version.maven-surefire-plugin>
 		<version.reactor-core>3.2.3.RELEASE</version.reactor-core>
-		<version.specialagent>1.0.1</version.specialagent>
+		<version.specialagent>1.0.2</version.specialagent>
 	</properties>
 
 	<dependencies>
