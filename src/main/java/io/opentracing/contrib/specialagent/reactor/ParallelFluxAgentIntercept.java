@@ -11,15 +11,16 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package io.opentracing.contrib.reactor;
+package io.opentracing.contrib.specialagent.reactor;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.opentracing.Tracer;
+import io.opentracing.contrib.reactor.TracedSubscriber;
 import io.opentracing.util.GlobalTracer;
 import reactor.core.publisher.Hooks;
 
-public class MonoAgentIntercept {
+public class ParallelFluxAgentIntercept {
   public static final AtomicBoolean inited = new AtomicBoolean();
 
   public static void enter() {
