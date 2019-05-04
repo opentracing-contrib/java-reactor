@@ -91,7 +91,7 @@ public class TracedSubscriber<T> implements SpanSubscription<T> {
 
 	private void withActiveSpan(Runnable runnable) {
 		if (span != null)
-			try (Scope inScope = tracer.scopeManager().activate(span, false)) {
+			try (Scope inScope = tracer.scopeManager().activate(span)) {
 				runnable.run();
 			}
 		else

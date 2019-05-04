@@ -44,11 +44,13 @@ public class AgentTest {
 		MockSpan initSpan = tracer.buildSpan("foo").start();
 		final AtomicReference<Long> spanInSubscriberContext = new AtomicReference<>();
 
-		try (Scope ws = tracer.scopeManager().activate(initSpan, true)) {
+		try (Scope ws = tracer.scopeManager().activate(initSpan)) {
 			Mono.subscriberContext()
 					.map(context -> ((MockSpan) context.get(Span.class)).context().spanId())
 					.doOnNext(spanInSubscriberContext::set)
 					.block();
+		} finally {
+			initSpan.finish();
 		}
 
 		assertEquals((long) spanInSubscriberContext.get(), initSpan.context().spanId()); // ok here

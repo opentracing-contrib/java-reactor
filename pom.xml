@@ -19,7 +19,7 @@
 
 	<groupId>io.opentracing.contrib</groupId>
 	<artifactId>opentracing-reactor</artifactId>
-	<version>0.0.3-SNAPSHOT</version>
+	<version>0.1.0-SNAPSHOT</version>
 
 	<name>${project.groupId}:${project.artifactId}</name>
 	<description>OpenTracing Instrumentation for Reactor</description>
@@ -73,12 +73,12 @@
 		<version.bytebuddy>1.9.12</version.bytebuddy>
 		<version.coveralls-maven-plugin>4.3.0</version.coveralls-maven-plugin>
 		<version.formatter>2.9.0</version.formatter>
-		<version.io.opentracing>0.31.0</version.io.opentracing>
+		<version.io.opentracing>0.32.0</version.io.opentracing>
 		<version.jacoco-maven-plugin>0.8.2</version.jacoco-maven-plugin>
 		<version.junit>4.12</version.junit>
 		<version.maven-surefire-plugin>2.22.1</version.maven-surefire-plugin>
 		<version.reactor-core>3.2.3.RELEASE</version.reactor-core>
-		<version.specialagent>1.0.2</version.specialagent>
+		<version.specialagent>1.1.1</version.specialagent>
 	</properties>
 
 	<dependencies>

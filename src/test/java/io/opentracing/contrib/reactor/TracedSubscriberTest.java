@@ -54,7 +54,7 @@ public class TracedSubscriberTest {
 		final AtomicReference<MockSpan> spanInOperation = new AtomicReference<>();
 		Publisher<Integer> traced = Flux.just(1, 2, 3);
 
-		try (Scope scope = tracer.scopeManager().activate(span, true)) {
+		try (Scope scope = tracer.scopeManager().activate(span)) {
 			Flux.from(traced)
 					.map(d -> d + 1)
 					.map(d -> d + 1)
@@ -64,6 +64,8 @@ public class TracedSubscriberTest {
 					})
 					.map(d -> d + 1)
 					.subscribe(System.out::println);
+		} finally {
+			span.finish();
 		}
 
 		assertNull(tracer.activeSpan());
@@ -75,7 +77,7 @@ public class TracedSubscriberTest {
 		MockSpan span = tracer.buildSpan("foo").start();
 		final AtomicReference<MockSpan> spanInOperation = new AtomicReference<>();
 
-		try (Scope scope = tracer.scopeManager().activate(span, true)) {
+		try (Scope scope = tracer.scopeManager().activate(span)) {
 			Mono.just(1)
 					.flatMap(d -> Flux.just(d + 1)
 							.collectList()
@@ -87,6 +89,8 @@ public class TracedSubscriberTest {
 					})
 					.map(d -> d + 1)
 					.subscribe(System.out::println);
+		} finally {
+			span.finish();
 		}
 
 		assertNull(tracer.activeSpan());
@@ -98,7 +102,7 @@ public class TracedSubscriberTest {
 		MockSpan span = tracer.buildSpan("foo").start();
 		final AtomicReference<Subscription> spanInOperation = new AtomicReference<>();
 
-		try (Scope scope = tracer.scopeManager().activate(span, true)) {
+		try (Scope scope = tracer.scopeManager().activate(span)) {
 			Mono.just(1).subscribe(new BaseSubscriber<Integer>() {
 				@Override
 				protected void hookOnSubscribe(Subscription subscription) {
@@ -134,6 +138,8 @@ public class TracedSubscriberTest {
 
 			assertNotNull(tracer.activeSpan());
 			assertFalse(spanInOperation.get() instanceof TracedSubscriber);
+		} finally {
+			span.finish();
 		}
 
 		assertNull(tracer.activeSpan());
@@ -144,7 +150,7 @@ public class TracedSubscriberTest {
 		MockSpan span = tracer.buildSpan("foo").start();
 		final AtomicReference<MockSpan> spanInOperation = new AtomicReference<>();
 
-		try (Scope scope = tracer.scopeManager().activate(span, true)) {
+		try (Scope scope = tracer.scopeManager().activate(span)) {
 			Flux.just(1, 2, 3).publishOn(Schedulers.single()).log("reactor.1")
 					.map(d -> d + 1).map(d -> d + 1).publishOn(Schedulers.newSingle("secondThread")).log("reactor.2")
 					.map((d) -> {
@@ -157,12 +163,14 @@ public class TracedSubscriberTest {
 			});
 
 			assertEquals(tracer.activeSpan(), span);
+		} finally {
+			span.finish();
 		}
 
 		assertNull(tracer.activeSpan());
 		MockSpan foo2 = tracer.buildSpan("foo").start();
 
-		try (Scope ws = tracer.scopeManager().activate(foo2, true)) {
+		try (Scope ws = tracer.scopeManager().activate(foo2)) {
 			Flux.just(1, 2, 3).publishOn(Schedulers.single()).log("reactor.").map(d -> d + 1).map(d -> d + 1).map((d) -> {
 				spanInOperation.set((MockSpan) tracer.activeSpan());
 				return d + 1;
@@ -171,6 +179,8 @@ public class TracedSubscriberTest {
 			assertEquals(tracer.activeSpan(), foo2);
 			// parent cause there's an async span in the meantime
 			assertEquals(spanInOperation.get().context().traceId(), foo2.context().traceId());
+		} finally {
+			foo2.finish();
 		}
 
 		assertNull(tracer.activeSpan());
@@ -180,7 +190,7 @@ public class TracedSubscriberTest {
 	public void checkSequenceOfOperations() {
 		MockSpan parentSpan = tracer.buildSpan("foo").start();
 
-		try (Scope scope = tracer.scopeManager().activate(parentSpan, true)) {
+		try (Scope scope = tracer.scopeManager().activate(parentSpan)) {
 			final Long traceId = Mono.fromCallable(tracer::activeSpan)
 					.map(span -> ((MockSpan) span).context().traceId())
 					.block();
@@ -190,6 +200,8 @@ public class TracedSubscriberTest {
 					.map(span -> ((MockSpan) span).context().traceId())
 					.block();
 			assertEquals(secondTraceId, traceId); // different trace ids here
+		} finally {
+			parentSpan.finish();
 		}
 	}
 
@@ -199,7 +211,7 @@ public class TracedSubscriberTest {
 		final AtomicReference<Long> spanInOperation = new AtomicReference<>();
 		final AtomicReference<Long> spanInZipOperation = new AtomicReference<>();
 
-		try (Scope ws = tracer.scopeManager().activate(initSpan, true)) {
+		try (Scope ws = tracer.scopeManager().activate(initSpan)) {
 			Mono.fromCallable(tracer::activeSpan)
 					.map(span -> ((MockSpan) span).context().traceId())
 					.doOnNext(spanInOperation::set)
@@ -208,6 +220,8 @@ public class TracedSubscriberTest {
 									.map(span -> ((MockSpan) span).context().traceId())
 									.doOnNext(spanInZipOperation::set))
 					.block();
+		} finally {
+			initSpan.finish();
 		}
 
 		assertEquals((long) spanInZipOperation.get(), initSpan.context().traceId()); // ok here
@@ -219,12 +233,14 @@ public class TracedSubscriberTest {
 	public void should_work_for_mono_just_with_flat_map() {
 		MockSpan initSpan = tracer.buildSpan("foo").start();
 
-		try (Scope ws = tracer.scopeManager().activate(initSpan, true)) {
+		try (Scope ws = tracer.scopeManager().activate(initSpan)) {
 			Mono.just("value1")
 					.flatMap(request -> Mono.just("value2")
 							.then(Mono.just("foo")))
 					.map(a -> "qwe")
 					.block();
+		} finally {
+			initSpan.finish();
 		}
 	}
 
@@ -234,10 +250,12 @@ public class TracedSubscriberTest {
 		MockSpan initSpan = tracer.buildSpan("foo").start();
 		final AtomicReference<Long> spanInSubscriberContext = new AtomicReference<>();
 
-		try (Scope ws = tracer.scopeManager().activate(initSpan, true)) {
+		try (Scope ws = tracer.scopeManager().activate(initSpan)) {
 			Mono.subscriberContext()
 					.map(context -> ((MockSpan) tracer.activeSpan()).context().spanId())
 					.doOnNext(spanInSubscriberContext::set).block();
+		} finally {
+			initSpan.finish();
 		}
 
 		assertEquals((long) spanInSubscriberContext.get(), initSpan.context().spanId()); // ok here
