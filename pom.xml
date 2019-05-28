@@ -70,7 +70,7 @@
 		<project.build.resourceEncoding>UTF-8</project.build.resourceEncoding>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<version.awaitility>3.0.0</version.awaitility>
-		<version.bytebuddy>1.9.12</version.bytebuddy>
+		<version.bytebuddy>1.9.13</version.bytebuddy>
 		<version.coveralls-maven-plugin>4.3.0</version.coveralls-maven-plugin>
 		<version.formatter>2.9.0</version.formatter>
 		<version.io.opentracing>0.32.0</version.io.opentracing>
