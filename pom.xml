@@ -78,7 +78,7 @@
 		<version.junit>4.12</version.junit>
 		<version.maven-surefire-plugin>2.22.1</version.maven-surefire-plugin>
 		<version.reactor-core>3.2.3.RELEASE</version.reactor-core>
-		<version.specialagent>1.2.0-SNAPSHOT</version.specialagent>
+		<version.specialagent>1.2.0</version.specialagent>
 	</properties>
 
 	<dependencies>
@@ -167,23 +167,6 @@
 			</plugin>
 			<!--Start special agent plugins-->
 			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-dependency-plugin</artifactId>
-				<version>3.1.1</version>
-				<executions>
-					<execution>
-						<goals>
-							<goal>tree</goal>
-						</goals>
-						<phase>generate-resources</phase>
-						<configuration>
-							<outputType>tgf</outputType>
-							<outputFile>${project.build.directory}/generated-resources/dependencies.tgf</outputFile>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-			<plugin>
 				<groupId>io.opentracing.contrib.specialagent</groupId>
 				<artifactId>agentrule-maven-plugin</artifactId>
 				<version>${version.specialagent}</version>
@@ -192,7 +175,7 @@
 						<goals>
 							<goal>fingerprint</goal>
 						</goals>
-						<phase>generate-resources</phase>
+						<phase>process-classes</phase>
 						<configuration>
 							<name>reactor</name>
 						</configuration>
