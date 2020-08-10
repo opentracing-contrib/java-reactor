@@ -76,12 +76,12 @@ public class TracedSubscriber<T> implements SpanSubscription<T> {
 
 	@Override
 	public void onError(Throwable throwable) {
-		subscriber.onError(throwable);
+		withActiveSpan(() -> subscriber.onError(throwable));
 	}
 
 	@Override
 	public void onComplete() {
-		subscriber.onComplete();
+		withActiveSpan(() -> subscriber.onComplete());
 	}
 
 	@Override
