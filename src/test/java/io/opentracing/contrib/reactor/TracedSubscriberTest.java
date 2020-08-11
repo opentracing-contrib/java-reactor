@@ -14,6 +14,7 @@
 package io.opentracing.contrib.reactor;
 
 import static org.junit.Assert.*;
+import static reactor.core.scheduler.Schedulers.elastic;
 
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -259,6 +260,36 @@ public class TracedSubscriberTest {
 		}
 
 		assertEquals((long) spanInSubscriberContext.get(), initSpan.context().spanId()); // ok here
+	}
+
+	@Test
+	public void activeSpanShouldBeAccessibleInOnCompleteCallback() {
+		MockSpan initSpan = tracer.buildSpan("foo").start();
+
+		try (Scope ws = tracer.scopeManager().activate(initSpan)) {
+			Flux.range(1, 5)
+				.flatMap(i -> Mono.fromCallable(() -> i * 2).subscribeOn(elastic()))
+				.doOnComplete(() -> assertNotNull(tracer.activeSpan()))
+				.then()
+				.block();
+		} finally {
+			initSpan.finish();
+		}
+	}
+
+	@Test
+	public void activeSpanShouldBeAccessibleInOnErrorCallback() {
+		MockSpan initSpan = tracer.buildSpan("foo").start();
+
+		try (Scope ws = tracer.scopeManager().activate(initSpan)) {
+			Mono.error(RuntimeException::new)
+				.subscribeOn(elastic())
+				.doOnError(e -> assertNotNull(tracer.activeSpan()))
+				.onErrorResume(RuntimeException.class, e -> Mono.just("fallback"))
+				.block();
+		} finally {
+			initSpan.finish();
+		}
 	}
 
 	@AfterClass
