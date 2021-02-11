@@ -4,7 +4,7 @@ import io.opentracing.Span;
 import io.opentracing.Tracer;
 import io.opentracing.Tracer.SpanBuilder;
 import io.opentracing.tag.Tags;
-import io.vavr.control.Either;
+import io.vavr.control.Try;
 import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Flux;
@@ -51,7 +51,7 @@ final class TracingPublishers {
          * Similar callback for adding more data to Span upon termination of the Publisher
          * Also a good idea to return the same Span that callback was passed as argument
          */
-        Span onFinish(Either<Throwable, SignalType> result, Span span);
+        Span onFinish(Try<SignalType> result, Span span);
     }
 
     static final class TracingFlux<E> extends Flux<E> {
@@ -84,6 +84,12 @@ final class TracingPublishers {
         }
     }
 
+    /**
+     * Using Separate Mono and Flux implementations instead of a single Publisher because otherwise Mono.transform
+     * wraps this publisher in Mono.next which cancels subscription after the first element, before it can complete on its own,
+     * and TracingSubscriber receives an incorrect termination signal which may be of importance if you're doing something
+     * with that signal in {@link SpanDecorator}
+     */
     static final class TracingMono<E> extends Mono<E> {
         public TracingMono(Mono<E> upstream, Tracer tracer, String spanName, String spanKind,
                            SpanDecorator decorator) {

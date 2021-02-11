@@ -3,6 +3,7 @@ package io.opentracing.contrib.reactor;
 import io.opentracing.Span;
 import io.opentracing.contrib.reactor.TracingPublishers.SpanDecorator;
 import io.vavr.control.Either;
+import io.vavr.control.Try;
 import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
 import reactor.core.publisher.SignalType;
@@ -46,19 +47,19 @@ public class TracingSubscriber<T> implements SpanSubscription<T> {
 
     @Override
     public void cancel() {
-        finishSpan(Either.right(SignalType.CANCEL));
+        finishSpan(Try.success(SignalType.CANCEL));
         subscription.cancel();
     }
 
     @Override
     public void onError(Throwable t) {
-        finishSpan(Either.left(t));
+        finishSpan(Try.failure(t));
         actual.onError(t);
     }
 
     @Override
     public void onComplete() {
-        finishSpan(Either.right(SignalType.ON_COMPLETE));
+        finishSpan(Try.success(SignalType.ON_COMPLETE));
         actual.onComplete();
     }
 
@@ -67,7 +68,7 @@ public class TracingSubscriber<T> implements SpanSubscription<T> {
         return context;
     }
 
-    private void finishSpan(Either<Throwable, SignalType> result) {
+    private void finishSpan(Try<SignalType> result) {
         if (finished.compareAndSet(false, true)) {
             decorator.onFinish(result, span)
                      .finish();

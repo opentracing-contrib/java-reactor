@@ -28,7 +28,7 @@ import io.vavr.Tuple;
 import io.vavr.collection.HashMap;
 import io.vavr.collection.List;
 import io.vavr.collection.Stream;
-import io.vavr.control.Either;
+import io.vavr.control.Try;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.Test;
 import org.reactivestreams.Publisher;
@@ -40,6 +40,7 @@ import reactor.util.Loggers;
 import reactor.util.context.Context;
 
 import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -97,8 +98,8 @@ public class TracedSubscriberTest {
         }
 
         @Override
-        public Span onFinish(Either<Throwable, SignalType> result, Span span) {
-            log.info("Finishing span: {}", span);
+        public Span onFinish(Try<SignalType> result, Span span) {
+            log.info("Finishing span: {} with {}", span, result);
 
             return span.log(HashMap.of("result", result.fold(Throwable::toString, SignalType::toString))
                                    .toJavaMap());
@@ -156,6 +157,16 @@ public class TracedSubscriberTest {
                 assertThat(s.parentId()).isEqualTo(span.context().spanId());
                 assertThat(s.context().traceId()).isEqualTo(span.context().traceId());
                 assertThat(s.tags().get("someTag")).isEqualTo("tag");
+                assertThat(Stream.ofAll(s.logEntries())
+                                 .map(le -> le.fields().get("result"))
+                                 .filter(Objects::nonNull)
+                                 .asJava())
+                    .asList()
+                    .hasSize(1)
+                    .first()
+                    .asInstanceOf(InstanceOfAssertFactories.type(String.class))
+                    .isEqualTo(ON_COMPLETE.toString());
+
             });
 
         assertThat(nested2.get())
