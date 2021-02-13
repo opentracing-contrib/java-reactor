@@ -1,17 +1,15 @@
 # OpenTracing Reactor Instrumentation
-OpenTracing instrumentation for Reactor. This instrumentation library is based on [spring-cloud-sleuth's reactor instrumentation](https://github.com/spring-cloud/spring-cloud-sleuth/tree/master/spring-cloud-sleuth-core/src/main/java/org/springframework/cloud/sleuth/instrument/reactor).
+OpenTracing instrumentation for Reactor. This instrumentation library was once based on [spring-cloud-sleuth's reactor instrumentation](https://github.com/spring-cloud/spring-cloud-sleuth/tree/master/spring-cloud-sleuth-core/src/main/java/org/springframework/cloud/sleuth/instrument/reactor).
 
-## OpenTracing Agents
-When using a runtime agent like [java-specialagent](https://github.com/opentracing-contrib/java-specialagent) `TracedSubscriber`s will be automatically added using `Hook.onEachOperator` and `Hooks.onLastOperator`.
+Allows wrapping any Mono or Flux in a span that starts on subscription and ends on complete, cancel or error signal.
+Reference to an active span is stored in subscription context and the next span upstream will use the current one as a parent
+regardless of what thread its subscribe() method is called on. When no span is found in Context, falls back to Tracer.activeSpan().
 
-Refer to the agent documentation for how to include this library as an instrumentation plugin.
-
-## Non-Agent Configuration
-When not using any of the OpenTracing Agents the `Hooks` must be added directly:
+Usage example (see TracedSubscriberTest for more):
 
 ```java
-Hooks.onEachOperator(TracedSubscriber.asOperator(tracer));
-Hooks.onLastOperator(TracedSubscriber.asOperator(tracer));
-
-...
+    myFlux.transform(f -> new TracingFlux<>(f, tracer, "span name", "span kind", myDecorator))
+    
 ```
+
+Supports pluggable decorator that can augment span with tags, logs, etc. upon creation as well as upon traced publisher's termination.
