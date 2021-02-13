@@ -41,6 +41,7 @@ import reactor.util.context.Context;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -89,6 +90,8 @@ public class TracedSubscriberTest {
 
 
     private static class DefaultSpanDecorator implements SpanDecorator {
+        protected static final String RESULT_KEY = "result";
+
         @Override
         public SpanBuilder onCreate(Context ctx, SpanBuilder builder) {
             // SpanBuilder's toString is useless and it doesn't expose its references
@@ -101,7 +104,7 @@ public class TracedSubscriberTest {
         public Span onFinish(Try<SignalType> result, Span span) {
             log.info("Finishing span: {} with {}", span, result);
 
-            return span.log(HashMap.of("result", result.fold(Throwable::toString, SignalType::toString))
+            return span.log(HashMap.of(RESULT_KEY, result.fold(Throwable::toString, SignalType::toString))
                                    .toJavaMap());
         }
     }
@@ -114,12 +117,18 @@ public class TracedSubscriberTest {
         MockSpan span = tracer.buildSpan("foo").start();
         final AtomicReference<MockSpan> nested1 = new AtomicReference<>();
         final AtomicReference<List<MockSpan>> nested2 = new AtomicReference<>(List.of());
+        final AtomicReference<MockSpan> nested3 = new AtomicReference<>();
 
         // pointless to ask ScopeManager about active span most of the time because onNext signals
         // are emitted on different threads from the one subscribe() was called on (and span was started)
         try (Scope scope = tracer.scopeManager().activate(span)) {
             Flux.just(1, 2, 3)
+                .transformDeferredContextual((f, ctx) -> {
+                    nested3.set(ctx.getOrDefault(Span.class, null));
+                    return f;
+                })
                 .delayElements(Duration.ofMillis(50))
+                .transform(TracedSubscriberTest.<Integer>tracedFlux(tracer, "nested3"))
                 .log("source")
                 .map(d ->
                     Mono.just(d + 1)
@@ -158,7 +167,7 @@ public class TracedSubscriberTest {
                 assertThat(s.context().traceId()).isEqualTo(span.context().traceId());
                 assertThat(s.tags().get("someTag")).isEqualTo("tag");
                 assertThat(Stream.ofAll(s.logEntries())
-                                 .map(le -> le.fields().get("result"))
+                                 .map(le -> le.fields().get(DefaultSpanDecorator.RESULT_KEY))
                                  .filter(Objects::nonNull)
                                  .asJava())
                     .asList()
@@ -166,7 +175,6 @@ public class TracedSubscriberTest {
                     .first()
                     .asInstanceOf(InstanceOfAssertFactories.type(String.class))
                     .isEqualTo(ON_COMPLETE.toString());
-
             });
 
         assertThat(nested2.get())
@@ -185,5 +193,46 @@ public class TracedSubscriberTest {
             .extracting(List::asJava)
             .asList()
             .containsExactly("tag1", "tag2", "tag3");
+
+        assertThat(nested3.get())
+            .isNotNull()
+            .extracting(MockSpan::parentId)
+            .isEqualTo(nested1.get().context().spanId());
+    }
+
+    @Test
+    public void should_work_with_errors_too() {
+        final AtomicReference<MockSpan> spanRef = new AtomicReference<>();
+
+        Throwable t = Mono
+            .<Void>error(new RuntimeException("surprise!"))
+            .transformDeferredContextual((f, ctx) -> {
+                spanRef.set(ctx.getOrDefault(Span.class, null));
+                return f;
+            })
+            .delaySubscription(Duration.ofMillis(20))
+            .transform(TracedSubscriberTest.<Void>tracedMono(tracer, "trace"))
+            .as(m -> Try.of(m::block).failed().get());
+
+        assertThat(spanRef.get())
+            .isNotNull()
+            .satisfies(s -> {
+                long durationMicros = s.finishMicros() - s.startMicros();
+                log.info("'{}' span duration: {} mcs", s.operationName(), durationMicros);
+                assertThat(durationMicros)
+                    .isGreaterThanOrEqualTo(TimeUnit.MILLISECONDS.toMicros(20));
+            })
+            .extracting(MockSpan::logEntries)
+            .satisfies(list ->
+                assertThat(Stream.ofAll(list)
+                                 .map(le -> le.fields().get(DefaultSpanDecorator.RESULT_KEY))
+                                 .filter(Objects::nonNull)
+                                 .asJava())
+                    .asList()
+                    .hasSize(1)
+                    .first()
+                    .asInstanceOf(InstanceOfAssertFactories.type(String.class))
+                    .isEqualTo(t.toString())
+            );
     }
 }
