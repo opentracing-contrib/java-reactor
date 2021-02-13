@@ -10,6 +10,7 @@ import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.SignalType;
+import reactor.util.annotation.Nullable;
 import reactor.util.context.Context;
 
 import java.util.function.BiFunction;
@@ -26,7 +27,7 @@ final class TracingPublishers {
 
     static Span createSpan(Context ctx, Tracer tracer,
                            String spanName, String spanKind,
-                           SpanDecorator decorator
+                           @Nullable SpanDecorator decorator
     ) {
         Span parent = ctx.<Span>getOrEmpty(Span.class).orElseGet(tracer::activeSpan);
 
@@ -34,8 +35,7 @@ final class TracingPublishers {
                                         .asChildOf(parent)
                                         .withTag(Tags.SPAN_KIND.getKey(), spanKind);
 
-        return decorator.onCreate(ctx, spanBuilder)
-                        .start();
+        return (decorator == null ? spanBuilder : decorator.onCreate(ctx, spanBuilder)).start();
     }
 
 

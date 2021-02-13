@@ -2,11 +2,11 @@ package io.opentracing.contrib.reactor;
 
 import io.opentracing.Span;
 import io.opentracing.contrib.reactor.TracingPublishers.SpanDecorator;
-import io.vavr.control.Either;
 import io.vavr.control.Try;
 import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
 import reactor.core.publisher.SignalType;
+import reactor.util.annotation.Nullable;
 import reactor.util.context.Context;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -20,7 +20,7 @@ public class TracingSubscriber<T> implements SpanSubscription<T> {
 
     private volatile Subscription subscription;
 
-    public TracingSubscriber(CoreSubscriber<? super T> actual, Span span, SpanDecorator decorator) {
+    public TracingSubscriber(CoreSubscriber<? super T> actual, Span span, @Nullable SpanDecorator decorator) {
         this.actual = actual;
         this.span = span;
         this.decorator = decorator;
@@ -70,8 +70,7 @@ public class TracingSubscriber<T> implements SpanSubscription<T> {
 
     private void finishSpan(Try<SignalType> result) {
         if (finished.compareAndSet(false, true)) {
-            decorator.onFinish(result, span)
-                     .finish();
+            (decorator == null ? span : decorator.onFinish(result, span)).finish();
         }
     }
 }
