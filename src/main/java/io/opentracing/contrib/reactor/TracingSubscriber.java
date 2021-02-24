@@ -1,7 +1,9 @@
 package io.opentracing.contrib.reactor;
 
 import io.opentracing.Span;
-import io.opentracing.contrib.reactor.TracingPublishers.SpanDecorator;
+import io.opentracing.Tracer;
+import io.opentracing.Tracer.SpanBuilder;
+import io.opentracing.tag.Tags;
 import io.vavr.control.Try;
 import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
@@ -20,12 +22,21 @@ public class TracingSubscriber<T> implements SpanSubscription<T> {
 
     private volatile Subscription subscription;
 
-    public TracingSubscriber(CoreSubscriber<? super T> actual, Span span, @Nullable SpanDecorator decorator) {
+    public TracingSubscriber(CoreSubscriber<? super T> actual, Tracer tracer, String spanName, String spanKind,
+                             @Nullable SpanDecorator decorator) {
         this.actual = actual;
-        this.span = span;
         this.decorator = decorator;
-        this.context = actual.currentContext().put(Span.class, span);
         this.finished = new AtomicBoolean(false);
+        Context context = actual.currentContext();
+
+        Span parent = context.<Span>getOrEmpty(Span.class).orElseGet(tracer::activeSpan);
+
+        SpanBuilder spanBuilder = tracer.buildSpan(spanName)
+                                        .asChildOf(parent)
+                                        .withTag(Tags.SPAN_KIND.getKey(), spanKind);
+
+        this.span = (decorator == null ? spanBuilder : decorator.onCreate(context, spanBuilder)).start();
+        this.context = context.put(Span.class, span);
     }
 
     @Override

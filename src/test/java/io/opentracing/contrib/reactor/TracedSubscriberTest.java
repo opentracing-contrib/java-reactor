@@ -17,12 +17,8 @@ import io.opentracing.Scope;
 import io.opentracing.Span;
 import io.opentracing.Tracer;
 import io.opentracing.Tracer.SpanBuilder;
-import io.opentracing.contrib.reactor.TracingPublishers.SpanDecorator;
-import io.opentracing.contrib.reactor.TracingPublishers.TracingFlux;
-import io.opentracing.contrib.reactor.TracingPublishers.TracingMono;
 import io.opentracing.mock.MockSpan;
 import io.opentracing.mock.MockTracer;
-import io.opentracing.noop.NoopTracer;
 import io.opentracing.util.ThreadLocalScopeManager;
 import io.vavr.Tuple;
 import io.vavr.collection.HashMap;
@@ -49,7 +45,6 @@ import java.util.logging.Level;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.Assert.assertNull;
 import static reactor.core.publisher.SignalType.ON_COMPLETE;
-import static reactor.core.publisher.SignalType.ON_NEXT;
 import static reactor.core.publisher.SignalType.ON_SUBSCRIBE;
 import static reactor.core.scheduler.Schedulers.boundedElastic;
 
@@ -59,27 +54,10 @@ public class TracedSubscriberTest {
     static final Logger log = Loggers.getLogger(TracedSubscriberTest.class.getSimpleName());
 
 
-    public static <E> Function<? super Flux<E>, ? extends Publisher<E>> tracedFlux(
+    static <T> Function<? super Publisher<T>, ? extends Publisher<T>> traceWithDefaultDecorator(
         Tracer tracer, String spanName
     ) {
-        return tracer instanceof NoopTracer ?
-            Function.identity() :
-            f -> new TracingFlux<>(f, tracer, spanName, "zero or more of a kind", DECORATOR_INSTANCE);
-    }
-
-    public static <E> Function<? super Mono<E>, ? extends Publisher<E>> tracedMono(
-        Tracer tracer, String spanName
-    ) {
-        return tracer instanceof NoopTracer ?
-            Function.identity() :
-            f -> new TracingMono<>(f, tracer, spanName, "one (or zero) of a kind", DECORATOR_INSTANCE);
-    }
-
-
-    static <T> Flux<T> logCtxVars(String prefix, Flux<T> source) {
-        return source.transformDeferredContextual(
-            (f, cv) -> f.log(prefix + "[" + Stream.ofAll(cv.stream()).toMap(Tuple::fromEntry) + "]",
-                Level.INFO, ON_SUBSCRIBE, ON_NEXT, ON_COMPLETE));
+        return Tracing.trace(tracer, spanName, DECORATOR_INSTANCE);
     }
 
     static <T> Mono<T> logCtxVars(String prefix, Mono<T> source) {
@@ -94,9 +72,6 @@ public class TracedSubscriberTest {
 
         @Override
         public SpanBuilder onCreate(Context ctx, SpanBuilder builder) {
-            // SpanBuilder's toString is useless and it doesn't expose its references
-//            log.info("Creating span: {}", builder);
-
             return builder.withTag("someTag", ctx.getOrDefault("someTag", "tag"));
         }
 
@@ -128,7 +103,7 @@ public class TracedSubscriberTest {
                     return f;
                 })
                 .delayElements(Duration.ofMillis(50))
-                .transform(TracedSubscriberTest.<Integer>tracedFlux(tracer, "nested3"))
+                .transform(TracedSubscriberTest.<Integer>traceWithDefaultDecorator(tracer, "nested3"))
                 .log("source")
                 .map(d ->
                     Mono.just(d + 1)
@@ -138,7 +113,7 @@ public class TracedSubscriberTest {
                                 list -> list.append(ctx.getOrDefault(Span.class, null)));
                             return m;
                         })
-                        .transform(TracedSubscriberTest.<Integer>tracedMono(tracer, "nested2"))
+                        .transform(TracedSubscriberTest.<Integer>traceWithDefaultDecorator(tracer, "nested2"))
                         .contextWrite(ctx -> ctx.put("someTag", "tag" + d))
                         .subscribeOn(boundedElastic()))
                 .concatMap(m -> m)
@@ -148,10 +123,10 @@ public class TracedSubscriberTest {
                     nested1.set(ctx.getOrDefault(Span.class, null));
                     return m;
                 })
-                .transform(TracedSubscriberTest.<java.util.List<Integer>>tracedMono(tracer, "nested1"))
+                .transform(TracedSubscriberTest.<java.util.List<Integer>>traceWithDefaultDecorator(tracer, "nested1"))
                 .log("result")
                 .block(Duration.ofSeconds(1));
-            // in order for the spans created by TracingPublishers to be children of the outermost one that we
+            // in order for the spans created by Tracing.trace to be children of the outermost one that we
             // create explicitly, outermost subscription must happen on the same thread that it was activated on
         } finally {
             span.finish();
@@ -211,7 +186,7 @@ public class TracedSubscriberTest {
                 return f;
             })
             .delaySubscription(Duration.ofMillis(20))
-            .transform(TracedSubscriberTest.<Void>tracedMono(tracer, "trace"))
+            .transform(TracedSubscriberTest.<Void>traceWithDefaultDecorator(tracer, "trace"))
             .as(m -> Try.of(m::block).failed().get());
 
         assertThat(spanRef.get())
