@@ -13,290 +13,201 @@
  */
 package io.opentracing.contrib.reactor;
 
-import static org.junit.Assert.*;
-import static reactor.core.scheduler.Schedulers.elastic;
-
-import java.util.concurrent.atomic.AtomicReference;
-
-import org.awaitility.Awaitility;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.reactivestreams.Publisher;
-import org.reactivestreams.Subscription;
-
 import io.opentracing.Scope;
+import io.opentracing.Span;
+import io.opentracing.Tracer;
+import io.opentracing.Tracer.SpanBuilder;
 import io.opentracing.mock.MockSpan;
 import io.opentracing.mock.MockTracer;
 import io.opentracing.util.ThreadLocalScopeManager;
-import reactor.core.publisher.BaseSubscriber;
+import io.vavr.Tuple;
+import io.vavr.collection.HashMap;
+import io.vavr.collection.List;
+import io.vavr.collection.Stream;
+import io.vavr.control.Try;
+import org.assertj.core.api.InstanceOfAssertFactories;
+import org.junit.Test;
+import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Hooks;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
+import reactor.core.publisher.SignalType;
+import reactor.util.Logger;
+import reactor.util.Loggers;
+import reactor.util.context.Context;
 
-/**
- * Based on Spring Sleuth's Reactor instrumentation
- *
- * @author Jose Montoya
- */
+import java.time.Duration;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.logging.Level;
+
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.junit.Assert.assertNull;
+import static reactor.core.publisher.SignalType.ON_COMPLETE;
+import static reactor.core.publisher.SignalType.ON_SUBSCRIBE;
+import static reactor.core.scheduler.Schedulers.boundedElastic;
+
 public class TracedSubscriberTest {
-	protected static final MockTracer tracer = new MockTracer(new ThreadLocalScopeManager());
+    protected static final MockTracer tracer = new MockTracer(new ThreadLocalScopeManager());
 
-	@BeforeClass
-	public static void beforeClass() {
-		Hooks.onEachOperator(TracedSubscriber.asOperator(tracer));
-		Hooks.onLastOperator(TracedSubscriber.asOperator(tracer));
-	}
+    static final Logger log = Loggers.getLogger(TracedSubscriberTest.class.getSimpleName());
 
-	@Test
-	public void should_pass_tracing_info_when_using_reactor() {
-		MockSpan span = tracer.buildSpan("foo").start();
-		final AtomicReference<MockSpan> spanInOperation = new AtomicReference<>();
-		Publisher<Integer> traced = Flux.just(1, 2, 3);
 
-		try (Scope scope = tracer.scopeManager().activate(span)) {
-			Flux.from(traced)
-					.map(d -> d + 1)
-					.map(d -> d + 1)
-					.map((d) -> {
-						spanInOperation.set((MockSpan) tracer.activeSpan());
-						return d + 1;
-					})
-					.map(d -> d + 1)
-					.subscribe(System.out::println);
-		} finally {
-			span.finish();
-		}
+    static <T> Function<? super Publisher<T>, ? extends Publisher<T>> traceWithDefaultDecorator(
+        Tracer tracer, String spanName
+    ) {
+        return Tracing.trace(tracer, spanName, DECORATOR_INSTANCE);
+    }
 
-		assertNull(tracer.activeSpan());
-		assertEquals(spanInOperation.get().context().traceId(), span.context().traceId());
-	}
+    static <T> Mono<T> logCtxVars(String prefix, Mono<T> source) {
+        return source.transformDeferredContextual(
+            (m, ctx) -> m.log(prefix + "[" + Stream.ofAll(ctx.stream()).toMap(Tuple::fromEntry) + "]",
+                Level.INFO, ON_SUBSCRIBE, ON_COMPLETE));
+    }
 
-	@Test
-	public void should_support_reactor_fusion_optimization() {
-		MockSpan span = tracer.buildSpan("foo").start();
-		final AtomicReference<MockSpan> spanInOperation = new AtomicReference<>();
 
-		try (Scope scope = tracer.scopeManager().activate(span)) {
-			Mono.just(1)
-					.flatMap(d -> Flux.just(d + 1)
-							.collectList()
-							.map(p -> p.get(0)))
-					.map(d -> d + 1)
-					.map((d) -> {
-						spanInOperation.set((MockSpan) tracer.activeSpan());
-						return d + 1;
-					})
-					.map(d -> d + 1)
-					.subscribe(System.out::println);
-		} finally {
-			span.finish();
-		}
+    private static class DefaultSpanDecorator implements SpanDecorator {
+        protected static final String RESULT_KEY = "result";
 
-		assertNull(tracer.activeSpan());
-		assertEquals(spanInOperation.get().context().traceId(), span.context().traceId());
-	}
+        @Override
+        public SpanBuilder onCreate(Context ctx, SpanBuilder builder) {
+            return builder.withTag("someTag", ctx.getOrDefault("someTag", "tag"));
+        }
 
-	@Test
-	public void should_not_trace_scalar_flows() {
-		MockSpan span = tracer.buildSpan("foo").start();
-		final AtomicReference<Subscription> spanInOperation = new AtomicReference<>();
+        @Override
+        public Span onFinish(Try<SignalType> result, Span span) {
+            log.info("Finishing span: {} with {}", span, result);
 
-		try (Scope scope = tracer.scopeManager().activate(span)) {
-			Mono.just(1).subscribe(new BaseSubscriber<Integer>() {
-				@Override
-				protected void hookOnSubscribe(Subscription subscription) {
-					spanInOperation.set(subscription);
-				}
-			});
+            return span.log(HashMap.of(RESULT_KEY, result.fold(Throwable::toString, SignalType::toString))
+                                   .toJavaMap());
+        }
+    }
 
-			assertNotNull(tracer.activeSpan());
-			assertFalse(spanInOperation.get() instanceof TracedSubscriber);
+    private static final DefaultSpanDecorator DECORATOR_INSTANCE = new DefaultSpanDecorator();
 
-			Mono.<Integer>error(new Exception())
-					.subscribe(new BaseSubscriber<Integer>() {
-						@Override
-						protected void hookOnSubscribe(Subscription subscription) {
-							spanInOperation.set(subscription);
-						}
 
-						@Override
-						protected void hookOnError(Throwable throwable) {
-						}
-					});
+    @Test
+    public void should_pass_tracing_info_when_using_reactor() {
+        MockSpan span = tracer.buildSpan("foo").start();
+        final AtomicReference<MockSpan> nested1 = new AtomicReference<>();
+        final AtomicReference<List<MockSpan>> nested2 = new AtomicReference<>(List.of());
+        final AtomicReference<MockSpan> nested3 = new AtomicReference<>();
 
-			assertNotNull(tracer.activeSpan());
-			assertFalse(spanInOperation.get() instanceof TracedSubscriber);
+        // pointless to ask ScopeManager about active span most of the time because onNext signals
+        // are emitted on different threads from the one subscribe() was called on (and span was started)
+        try (Scope scope = tracer.scopeManager().activate(span)) {
+            Flux.just(1, 2, 3)
+                .transformDeferredContextual((f, ctx) -> {
+                    nested3.set(ctx.getOrDefault(Span.class, null));
+                    return f;
+                })
+                .delayElements(Duration.ofMillis(50))
+                .transform(TracedSubscriberTest.<Integer>traceWithDefaultDecorator(tracer, "nested3"))
+                .log("source")
+                .map(d ->
+                    Mono.just(d + 1)
+                        .as(m -> logCtxVars("nested2", m))
+                        .transformDeferredContextual((m, ctx) -> {
+                            nested2.getAndUpdate(
+                                list -> list.append(ctx.getOrDefault(Span.class, null)));
+                            return m;
+                        })
+                        .transform(TracedSubscriberTest.<Integer>traceWithDefaultDecorator(tracer, "nested2"))
+                        .contextWrite(ctx -> ctx.put("someTag", "tag" + d))
+                        .subscribeOn(boundedElastic()))
+                .concatMap(m -> m)
+                .map(d -> d + 1)
+                .collectList()
+                .transformDeferredContextual((m, ctx) -> {
+                    nested1.set(ctx.getOrDefault(Span.class, null));
+                    return m;
+                })
+                .transform(TracedSubscriberTest.<java.util.List<Integer>>traceWithDefaultDecorator(tracer, "nested1"))
+                .log("result")
+                .block(Duration.ofSeconds(1));
+            // in order for the spans created by Tracing.trace to be children of the outermost one that we
+            // create explicitly, outermost subscription must happen on the same thread that it was activated on
+        } finally {
+            span.finish();
+        }
 
-			Mono.<Integer>empty()
-					.subscribe(new BaseSubscriber<Integer>() {
-						@Override
-						protected void hookOnSubscribe(Subscription subscription) {
-							spanInOperation.set(subscription);
-						}
-					});
+        assertNull(tracer.activeSpan());
 
-			assertNotNull(tracer.activeSpan());
-			assertFalse(spanInOperation.get() instanceof TracedSubscriber);
-		} finally {
-			span.finish();
-		}
+        assertThat(nested1.get())
+            .isNotNull()
+            .satisfies(s -> {
+                assertThat(s.operationName()).isEqualTo("nested1");
+                assertThat(s.parentId()).isEqualTo(span.context().spanId());
+                assertThat(s.context().traceId()).isEqualTo(span.context().traceId());
+                assertThat(s.tags().get("someTag")).isEqualTo("tag");
+                assertThat(Stream.ofAll(s.logEntries())
+                                 .map(le -> le.fields().get(DefaultSpanDecorator.RESULT_KEY))
+                                 .filter(Objects::nonNull)
+                                 .asJava())
+                    .asList()
+                    .hasSize(1)
+                    .first()
+                    .asInstanceOf(InstanceOfAssertFactories.type(String.class))
+                    .isEqualTo(ON_COMPLETE.toString());
+            });
 
-		assertNull(tracer.activeSpan());
-	}
+        assertThat(nested2.get())
+            .isNotNull()
+            .extracting(List::asJava)
+            .asList()
+            .hasSize(3)
+            .allSatisfy(s ->
+                assertThat(s)
+                    .isNotNull()
+                    .asInstanceOf(InstanceOfAssertFactories.type(MockSpan.class))
+                    .extracting(MockSpan::parentId)
+                    .isEqualTo(nested1.get().context().spanId()));
 
-	@Test
-	public void should_pass_tracing_info_when_using_reactor_async() {
-		MockSpan span = tracer.buildSpan("foo").start();
-		final AtomicReference<MockSpan> spanInOperation = new AtomicReference<>();
+        assertThat(nested2.get().map(s -> s.tags().get("someTag")))
+            .extracting(List::asJava)
+            .asList()
+            .containsExactly("tag1", "tag2", "tag3");
 
-		try (Scope scope = tracer.scopeManager().activate(span)) {
-			Flux.just(1, 2, 3).publishOn(Schedulers.single()).log("reactor.1")
-					.map(d -> d + 1).map(d -> d + 1).publishOn(Schedulers.newSingle("secondThread")).log("reactor.2")
-					.map((d) -> {
-						spanInOperation.set((MockSpan) tracer.activeSpan());
-						return d + 1;
-					}).map(d -> d + 1).blockLast();
+        assertThat(nested3.get())
+            .isNotNull()
+            .extracting(MockSpan::parentId)
+            .isEqualTo(nested1.get().context().spanId());
+    }
 
-			Awaitility.await().untilAsserted(() -> {
-				assertEquals(spanInOperation.get().context().traceId(), span.context().traceId());
-			});
+    @Test
+    public void should_work_with_errors_too() {
+        final AtomicReference<MockSpan> spanRef = new AtomicReference<>();
 
-			assertEquals(tracer.activeSpan(), span);
-		} finally {
-			span.finish();
-		}
+        Throwable t = Mono
+            .<Void>error(new RuntimeException("surprise!"))
+            .transformDeferredContextual((f, ctx) -> {
+                spanRef.set(ctx.getOrDefault(Span.class, null));
+                return f;
+            })
+            .delaySubscription(Duration.ofMillis(20))
+            .transform(TracedSubscriberTest.<Void>traceWithDefaultDecorator(tracer, "trace"))
+            .as(m -> Try.of(m::block).failed().get());
 
-		assertNull(tracer.activeSpan());
-		MockSpan foo2 = tracer.buildSpan("foo").start();
-
-		try (Scope ws = tracer.scopeManager().activate(foo2)) {
-			Flux.just(1, 2, 3).publishOn(Schedulers.single()).log("reactor.").map(d -> d + 1).map(d -> d + 1).map((d) -> {
-				spanInOperation.set((MockSpan) tracer.activeSpan());
-				return d + 1;
-			}).map(d -> d + 1).blockLast();
-
-			assertEquals(tracer.activeSpan(), foo2);
-			// parent cause there's an async span in the meantime
-			assertEquals(spanInOperation.get().context().traceId(), foo2.context().traceId());
-		} finally {
-			foo2.finish();
-		}
-
-		assertNull(tracer.activeSpan());
-	}
-
-	@Test
-	public void checkSequenceOfOperations() {
-		MockSpan parentSpan = tracer.buildSpan("foo").start();
-
-		try (Scope scope = tracer.scopeManager().activate(parentSpan)) {
-			final Long traceId = Mono.fromCallable(tracer::activeSpan)
-					.map(span -> ((MockSpan) span).context().traceId())
-					.block();
-			assertNotNull(traceId);
-
-			final Long secondTraceId = Mono.fromCallable(tracer::activeSpan)
-					.map(span -> ((MockSpan) span).context().traceId())
-					.block();
-			assertEquals(secondTraceId, traceId); // different trace ids here
-		} finally {
-			parentSpan.finish();
-		}
-	}
-
-	@Test
-	public void checkTraceIdDuringZipOperation() {
-		MockSpan initSpan = tracer.buildSpan("foo").start();
-		final AtomicReference<Long> spanInOperation = new AtomicReference<>();
-		final AtomicReference<Long> spanInZipOperation = new AtomicReference<>();
-
-		try (Scope ws = tracer.scopeManager().activate(initSpan)) {
-			Mono.fromCallable(tracer::activeSpan)
-					.map(span -> ((MockSpan) span).context().traceId())
-					.doOnNext(spanInOperation::set)
-					.zipWith(
-							Mono.fromCallable(tracer::activeSpan)
-									.map(span -> ((MockSpan) span).context().traceId())
-									.doOnNext(spanInZipOperation::set))
-					.block();
-		} finally {
-			initSpan.finish();
-		}
-
-		assertEquals((long) spanInZipOperation.get(), initSpan.context().traceId()); // ok here
-		assertEquals((long) spanInOperation.get(), initSpan.context().traceId()); // Expecting <AtomicReference[null]> to have value: <1L> but did not.
-	}
-
-	// #646
-	@Test
-	public void should_work_for_mono_just_with_flat_map() {
-		MockSpan initSpan = tracer.buildSpan("foo").start();
-
-		try (Scope ws = tracer.scopeManager().activate(initSpan)) {
-			Mono.just("value1")
-					.flatMap(request -> Mono.just("value2")
-							.then(Mono.just("foo")))
-					.map(a -> "qwe")
-					.block();
-		} finally {
-			initSpan.finish();
-		}
-	}
-
-	// #1030
-	@Test
-	public void checkTraceIdFromSubscriberContext() {
-		MockSpan initSpan = tracer.buildSpan("foo").start();
-		final AtomicReference<Long> spanInSubscriberContext = new AtomicReference<>();
-
-		try (Scope ws = tracer.scopeManager().activate(initSpan)) {
-			Mono.subscriberContext()
-					.map(context -> ((MockSpan) tracer.activeSpan()).context().spanId())
-					.doOnNext(spanInSubscriberContext::set).block();
-		} finally {
-			initSpan.finish();
-		}
-
-		assertEquals((long) spanInSubscriberContext.get(), initSpan.context().spanId()); // ok here
-	}
-
-	@Test
-	public void activeSpanShouldBeAccessibleInOnCompleteCallback() {
-		MockSpan initSpan = tracer.buildSpan("foo").start();
-
-		try (Scope ws = tracer.scopeManager().activate(initSpan)) {
-			Flux.range(1, 5)
-				.flatMap(i -> Mono.fromCallable(() -> i * 2).subscribeOn(elastic()))
-				.doOnComplete(() -> assertNotNull(tracer.activeSpan()))
-				.then()
-				.block();
-		} finally {
-			initSpan.finish();
-		}
-	}
-
-	@Test
-	public void activeSpanShouldBeAccessibleInOnErrorCallback() {
-		MockSpan initSpan = tracer.buildSpan("foo").start();
-
-		try (Scope ws = tracer.scopeManager().activate(initSpan)) {
-			Mono.error(RuntimeException::new)
-				.subscribeOn(elastic())
-				.doOnError(e -> assertNotNull(tracer.activeSpan()))
-				.onErrorResume(RuntimeException.class, e -> Mono.just("fallback"))
-				.block();
-		} finally {
-			initSpan.finish();
-		}
-	}
-
-	@AfterClass
-	public static void cleanup() {
-		Hooks.resetOnLastOperator();
-		Hooks.resetOnEachOperator();
-		Schedulers.resetFactory();
-	}
-
+        assertThat(spanRef.get())
+            .isNotNull()
+            .satisfies(s -> {
+                long durationMicros = s.finishMicros() - s.startMicros();
+                log.info("'{}' span duration: {} mcs", s.operationName(), durationMicros);
+                assertThat(durationMicros)
+                    .isGreaterThanOrEqualTo(TimeUnit.MILLISECONDS.toMicros(20));
+            })
+            .extracting(MockSpan::logEntries)
+            .satisfies(list ->
+                assertThat(Stream.ofAll(list)
+                                 .map(le -> le.fields().get(DefaultSpanDecorator.RESULT_KEY))
+                                 .filter(Objects::nonNull)
+                                 .asJava())
+                    .asList()
+                    .hasSize(1)
+                    .first()
+                    .asInstanceOf(InstanceOfAssertFactories.type(String.class))
+                    .isEqualTo(t.toString())
+            );
+    }
 }

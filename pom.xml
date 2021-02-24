@@ -77,7 +77,8 @@
 		<version.jacoco-maven-plugin>0.8.2</version.jacoco-maven-plugin>
 		<version.junit>4.12</version.junit>
 		<version.maven-surefire-plugin>2.22.1</version.maven-surefire-plugin>
-		<version.reactor-core>3.2.3.RELEASE</version.reactor-core>
+		<version.reactor-core>3.4.1</version.reactor-core>
+		<version.vavr>0.10.3</version.vavr>
 	</properties>
 
 	<dependencies>
@@ -97,6 +98,12 @@
 			<groupId>io.projectreactor</groupId>
 			<artifactId>reactor-core</artifactId>
 			<version>${version.reactor-core}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.vavr</groupId>
+			<artifactId>vavr</artifactId>
+			<version>${version.vavr}</version>
 			<scope>provided</scope>
 		</dependency>
 		<dependency>
@@ -129,6 +136,26 @@
 			<version>${version.awaitility}</version>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>org.assertj</groupId>
+			<artifactId>assertj-core</artifactId>
+			<version>3.19.0</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-api</artifactId>
+			<version>1.7.30</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-simple</artifactId>
+			<version>1.7.30</version>
+			<scope>test</scope>
+		</dependency>
+
+
 	</dependencies>
 
 	<build>
