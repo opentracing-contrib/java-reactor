@@ -1,5 +1,6 @@
 # OpenTracing Reactor Instrumentation
-OpenTracing instrumentation for Reactor. This instrumentation library was once based on [spring-cloud-sleuth's reactor instrumentation](https://github.com/spring-cloud/spring-cloud-sleuth/tree/master/spring-cloud-sleuth-core/src/main/java/org/springframework/cloud/sleuth/instrument/reactor).
+OpenTracing instrumentation for Reactor. 
+Basically a copy of what was done in https://github.com/rsocket/rsocket-rpc-java/tree/master/rsocket-rpc-core/src/main/java/io/rsocket/rpc/tracing
 
 Allows wrapping any Mono or Flux in a span that starts on subscription and ends on complete, cancel or error signal.
 Reference to an active span is stored in subscription context during subscribe() invocation and the next span upstream 
@@ -11,7 +12,7 @@ When no span is found in Context, falls back to Tracer.activeSpan().
 Usage example (see TracedSubscriberTest for more):
 
 ```java
-    myFlux.transform(f -> new TracingFlux<>(f, tracer, "span name", "span kind", myDecorator))
+    myFlux.transform(Tracing.trace(tracer, "span name", "span kind", myDecorator))
     
 ```
 
